@@ -192,10 +192,11 @@ class Output {
         let cursorCol = j;
 
         // Delete the char displayed there
-        do Screen.setColor(false);
-        let x = cursorCol * charWidth;
-        let y = cursorRow * charHeight;
-        do Screen.drawRectangle(x, y, x + charWidth - 1, y + charHeight - 1);
+        do Output.printChar(32);   // space char replaces char
+
+        // Puts cursor back in position
+        let cursorRow = i;
+        let cursorCol = j;
         return;      
     }
 
