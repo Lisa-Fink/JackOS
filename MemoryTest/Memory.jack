@@ -47,7 +47,7 @@ class Memory {
             let segmentSize = next[1];
 
             // if size is exact take entire segment
-            if (segmentSize = (size + 2)) {
+            if (segmentSize = size) {
                 // Remove it from list
                 // head of list
                 if (prev = 0) {

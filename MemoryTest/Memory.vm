@@ -60,8 +60,6 @@ label Memory_0
     pop local 1
     push local 1
     push argument 0
-    push constant 2
-    add
     eq
     not
     if-goto Memory_3
