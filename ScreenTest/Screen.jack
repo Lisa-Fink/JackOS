@@ -75,7 +75,7 @@ class Screen {
     }
 
     function void drawHorizontalLine(int x1, int x2, int y) {
-        var int address, value, bit, bitIdx, quotient, product, start, end, temp;
+        var int address, value, bit, bitIdx, quotient, product, start, end, temp, left , right;
         // horizontal straight line - going east
         // Can handle going west instead of east by just swapping
         if (x1 > x2) {
@@ -92,7 +92,6 @@ class Screen {
         let quotient = x1 / 16;
         let product = quotient * 16;
         let bitIdx = x1 - product;
-        let bit = powersOfTwo[bitIdx];
 
         let start = x1;
         let end = x2 + 1;
@@ -100,19 +99,30 @@ class Screen {
         // fill in bits remaining on first word in ram if not complete line
         if (bitIdx > 0) {
             // rightmost bit is leftmost dot on screen (x=0 corresponds to right-most bit of word)
-            while ((start < end) & (bitIdx < 16)) {
-                if (color = true) {
+            // figure out how many and which bits to flip on the incomplete first WORD
+            // use temp for last bit bitIdx
+            let temp = bitIdx + end - start;
+
+            if (temp > 15) {
+                // goes to end so just flip everything to the left of start bit
+                let left = -1;
+                let right = ~(powersOfTwo[bitIdx] - 1);
+            } else {
+                // incomplete first bit so need to find end of left side
+                let left = powersOfTwo[temp] - 1;
+                let right = ~(powersOfTwo[bitIdx] - 1);
+            }
+
+            let bit = left & right;
+            if (color = true) {
                 let value = value | bit;
-                } else {
-                    let bit = ~bit;
-                    let value = value & bit;
-                }
-                let bitIdx = bitIdx + 1;
-                let bit = powersOfTwo[bitIdx];
-                let start = start + 1;
+            } else {
+                let value = value & (~bit);
             }
             do Memory.poke(baseAddr + address, value);
+
             let address = address + 1;
+            let start = start + 16 - bitIdx;
         }
 
         // try to fill as many 16 bit words at once as possible
@@ -127,20 +137,15 @@ class Screen {
         }
 
         if (start < end) {
-            // fill in bits remaining on last word in ram if not complete line at end
-            let bitIdx = 0;
             let value = Memory.peek(baseAddr + address);
-            while ((start < end) & (bitIdx < 16)) {
-                let bit = powersOfTwo[bitIdx];
-                if (color = true) {
-                let value = value | bit;
-                } else {
-                    let bit = ~bit;
-                    let value = value & bit;
-                }
-                let bitIdx = bitIdx + 1;
-                let start = start + 1;
+            // fill in bits remaining on last word in ram if not complete line at end
+            let bitIdx = end - start;
+            if (color = true) {
+                let value = value | (powersOfTwo[bitIdx] - 1);
+            } else {
+                let value = value & (~(powersOfTwo[bitIdx] - 1));
             }
+            
             do Memory.poke(baseAddr + address, value);
         }
         return;
@@ -262,13 +267,102 @@ class Screen {
     /** Draws a filled rectangle whose top left corner is (x1, y1)
      *  and bottom right corner is (x2,y2), using the current color. */
     function void drawRectangle(int x1, int y1, int x2, int y2) {
-        var int start, end;
-        let start = y1;
-        let end = y2 + 1;
-        // Might be faster to draw vertical/horizontal lines depending on args
-        while (start < end) {
-            do Screen.drawLine(x1, start, x2, start);
-            let start = start + 1;
+        // Modified draw horizontal line to update each row in the same loop
+        var int address, value, bit, bitIdx, quotient, product, start, end, temp, left , right, rowAddress, row;
+        // horizontal straight line - going east
+        // Can handle going west instead of east by just swapping
+        if (x1 > x2) {
+            let temp = x1;
+            let x1 = x2;
+            let x2 = temp;
+        }
+        let address = (32 * y1) + (x1 / 16) + baseAddr;
+
+
+        // get the bit that line starts on
+        // bit is x % 16 but % doesn't exist in Jack
+        let quotient = x1 / 16;
+        let product = quotient * 16;
+        let bitIdx = x1 - product;
+
+        let start = x1;
+        let end = x2 + 1;
+
+        // fill in bits remaining on first word in ram if not complete line
+        if (bitIdx > 0) {
+            // rightmost bit is leftmost dot on screen (x=0 corresponds to right-most bit of word)
+            // figure out how many and which bits to flip on the incomplete first WORD
+            // use temp for last bit bitIdx
+            let temp = bitIdx + end - start;
+
+            if (temp > 15) {
+                // goes to end so just flip everything to the left of start bit
+                let left = -1;
+                let right = ~(powersOfTwo[bitIdx] - 1);
+            } else {
+                // incomplete first bit so need to find end of left side
+                let left = powersOfTwo[temp] - 1;
+                let right = ~(powersOfTwo[bitIdx] - 1);
+            }
+
+            let bit = left & right;
+            
+            let row = y1;
+            let rowAddress = address;
+            while (row < (y2 + 1)) {
+                let value = Memory.peek(rowAddress);
+                if (color = true) {
+                    let value = value | bit;
+                } else {
+                    let value = value & (~bit);
+                }
+                do Memory.poke(rowAddress, value);
+                let rowAddress = rowAddress + 32;
+                let row = row + 1;
+            }
+
+            let address = address + 1;
+            let start = start + 16 - bitIdx;
+        }
+
+        // try to fill as many 16 bit words at once as possible
+        while ((start + 15) < end) {
+
+            let row = y1;
+            let rowAddress = address;
+            while (row < (y2 + 1)) {
+                if (color = true) {
+                    do Memory.poke(rowAddress, -1);
+                } else {
+                    do Memory.poke(rowAddress, 0);
+                }
+                let rowAddress = rowAddress + 32;
+                let row = row + 1;
+            }
+            
+            let start = start + 16;
+            let address = address + 1;
+        }
+
+        if (start < end) {
+            
+            // fill in bits remaining on last word in ram if not complete line at end
+            let bitIdx = end - start;
+
+            let row = y1;
+            let rowAddress = address;
+            while (row < (y2 + 1)) {
+                let value = Memory.peek(rowAddress);
+                if (color = true) {
+                    let value = value | (powersOfTwo[bitIdx] - 1);
+                } else {
+                    let value = value & (~(powersOfTwo[bitIdx] - 1));
+                }
+                
+                do Memory.poke(rowAddress, value);
+                let rowAddress = rowAddress + 32;
+                let row = row + 1;
+            }
         }
         return;
     }
